@@ -19,17 +19,26 @@ class PrecificadoraGrafica:
 
     def sugerir_encadernacao(self, qtd_folhas, tipo_garra):
         if "Espiral" in tipo_garra:
-            if qtd_folhas <= 50: return "Espiral 9mm"
+            if qtd_folhas <= 25: return "Espiral 07mm"
+            if qtd_folhas <= 50: return "Espiral 09mm"
+            if qtd_folhas <= 70: return "Espiral 12mm"
+            if qtd_folhas <= 85: return "Espiral 14mm"
             if qtd_folhas <= 100: return "Espiral 17mm"
             if qtd_folhas <= 120: return "Espiral 20mm"
+            if qtd_folhas <= 140: return "Espiral 23mm"
+            if qtd_folhas <= 160: return "Espiral 25mm"
             if qtd_folhas <= 200: return "Espiral 29mm"
-            return "Espiral 33mm+"
+            if qtd_folhas <= 250: return "Espiral 33mm"
+            if qtd_folhas <= 350: return "Espiral 40mm"
+            if qtd_folhas <= 400: return "Espiral 45mm"
+            return "Espiral 50mm"
         else:
-            if qtd_folhas <= 50: return "Wire-o 3/8\" (Passo 3:1)"
-            if qtd_folhas <= 100: return "Wire-o 5/8\" (Passo 2:1 ou 3:1)"
-            if qtd_folhas <= 120: return "Wire-o 3/4\" (Passo 2:1)"
-            if qtd_folhas <= 200: return "Wire-o 1\" (Passo 2:1)"
-            return "Wire-o 1 1/4\" (Passo 2:1)"
+            if qtd_folhas <= 120: return "Wire-o 5/8\" (15,8 mm)"
+            if qtd_folhas <= 140: return "Wire-o 3/4\" (19,0 mm)"
+            if qtd_folhas <= 180: return "Wire-o 7/8\" (22,2 mm)"
+            if qtd_folhas <= 200: return "Wire-o 1\" (25,4 mm)"
+            if qtd_folhas <= 250: return "Wire-o 1 1/8\" (28,5 mm)"
+            return "Wire-o 1 1/4\" (31,7 mm) ou maior"
 
     def calcular_orcamento_papel(self, preco_resma, folhas_por_resma, total_folhas_mae, tempo_total_min, custo_acab, custo_encadernacao, margem):
         custo_mat = (preco_resma / folhas_por_resma) * total_folhas_mae if total_folhas_mae > 0 else 0
