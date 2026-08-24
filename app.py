@@ -60,19 +60,23 @@ class PrecificadoraGrafica:
             "Preço Unitário": 0
         }
 
-    def calcular_orcamento_sublimacao(self, custo_caneca, custo_insumos, tempo_prensa_min, tiragem, margem):
+    def calcular_orcamento_sublimacao(self, custo_caneca, custo_insumos, custo_embalagem_unit, tempo_prensa_min, tiragem, margem):
         custo_mat_caneca = custo_caneca * tiragem
         custo_mat_insumo = custo_insumos * tiragem
+        custo_mat_embalagem = custo_embalagem_unit * tiragem
+        
+        # Considera o tempo de cada caneca + 5 min de aquecimento da prensa
         tempo_total_min = (tempo_prensa_min * tiragem) + 5 
         custo_maq = (tempo_total_min / 60.0) * self.custo_hora_maquina
         
-        custo_total_producao = custo_mat_caneca + custo_mat_insumo + custo_maq
+        custo_total_producao = custo_mat_caneca + custo_mat_insumo + custo_mat_embalagem + custo_maq
         fator_divisor = 1.0 - ((margem + self.imposto_percentual) / 100.0)
         preco_venda = custo_total_producao / fator_divisor
         
         return {
             "Custo Canecas Brancas": custo_mat_caneca,
             "Custo Insumos (Papel/Tinta)": custo_mat_insumo,
+            "Custo Embalagens (Caixas/Sacolas)": custo_mat_embalagem,
             "Custo de Máquina (Prensa)": custo_maq,
             "Custo Total de Produção": custo_total_producao,
             "Valor do Imposto": preco_venda * (self.imposto_percentual / 100.0),
@@ -142,13 +146,34 @@ if tipo_produto == "☕ Canecas Sublimáticas (Porcelana)":
         custo_insumos = st.number_input("Papel + Tinta por Caneca (R$)", value=1.50, step=0.10)
     with colB:
         tempo_prensa = st.number_input("Tempo de Prensa (min/caneca)", value=3.0, step=0.5)
-        tiragem_cliente = st.number_input("Quantidade de Canecas", value=10, step=1)
+        tiragem_cliente = st.number_input("Quantidade de Canecas", value=1, step=1)
     with colC:
         margem_lucro = st.number_input("Margem de Lucro Desejada (%)", value=50.00, step=5.00)
         
     st.markdown("---")
+    st.header("📦 Embalagens (Opcional)")
+    col_emb1, col_emb2, col_emb3 = st.columns(3)
+    
+    with col_emb1:
+        custo_sacola = st.number_input("Custo da Sacola Simples (R$)", value=0.00, step=0.50)
+    with col_emb2:
+        custo_caixinha = st.number_input("Custo da Caixinha Padrão (R$)", value=0.00, step=0.50)
+    with col_emb3:
+        custo_cartonada = st.number_input("Custo da Caixa Cartonada (R$)", value=0.00, step=1.00)
+        
+    # Soma o valor de todas as embalagens escolhidas para 1 unidade
+    custo_embalagem_unit = custo_sacola + custo_caixinha + custo_cartonada
+        
+    st.markdown("---")
     if st.button("Calcular Orçamento de Canecas", type="primary", use_container_width=True):
-        res = sistema.calcular_orcamento_sublimacao(custo_caneca, custo_insumos, tempo_prensa, tiragem_cliente, margem_lucro)
+        res = sistema.calcular_orcamento_sublimacao(
+            custo_caneca, 
+            custo_insumos, 
+            custo_embalagem_unit, 
+            tempo_prensa, 
+            tiragem_cliente, 
+            margem_lucro
+        )
         res["Preço Unitário"] = res["Preço de Venda Final"] / tiragem_cliente
         
         st.success("Orçamento gerado com sucesso!")
