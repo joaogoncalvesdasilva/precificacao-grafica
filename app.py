@@ -40,19 +40,21 @@ class PrecificadoraGrafica:
             if qtd_folhas <= 250: return "Wire-o 1 1/8\" (28,5 mm)"
             return "Wire-o 1 1/4\" (31,7 mm) ou maior"
 
-    def calcular_orcamento_papel(self, preco_resma, folhas_por_resma, total_folhas_mae, tempo_total_min, custo_acab, custo_encadernacao, margem):
+    def calcular_orcamento_papel(self, preco_resma, folhas_por_resma, total_folhas_mae, tempo_total_min, custo_acab, custo_encadernacao, custo_capa, margem):
         custo_mat = (preco_resma / folhas_por_resma) * total_folhas_mae if total_folhas_mae > 0 else 0
         custo_maq = (tempo_total_min / 60.0) * self.custo_hora_maquina
-        custo_total_producao = custo_mat + custo_maq + custo_acab + custo_encadernacao
+        
+        custo_total_producao = custo_mat + custo_maq + custo_acab + custo_encadernacao + custo_capa
 
         fator_divisor = 1.0 - ((margem + self.imposto_percentual) / 100.0)
         preco_venda = custo_total_producao / fator_divisor
         
         return {
-            "Custo do Papel": custo_mat,
-            "Custo de Máquina": custo_maq,
+            "Custo do Papel (Miolo)": custo_mat,
+            "Custo Capa Dura (Holler/Foto/BOPP)": custo_capa,
+            "Custo Insumos (Garra/Encadernação)": custo_encadernacao,
+            "Custo de Máquina / Energia / Mão de Obra": custo_maq,
             "Acabamentos Extras": custo_acab,
-            "Custo Encadernação (Wire-o/Espiral)": custo_encadernacao,
             "Custo Total de Produção": custo_total_producao,
             "Valor do Imposto": preco_venda * (self.imposto_percentual / 100.0),
             "Lucro Estimado": preco_venda * (margem / 100.0),
@@ -95,7 +97,6 @@ def gerar_pdf(resultado, qtd_pecas, nome_cliente):
     pdf.cell(200, 10, txt="Detalhes do Pedido:", ln=True)
     pdf.set_font("Arial", '', 12)
     
-    # Adiciona o nome do cliente no PDF se foi preenchido
     if nome_cliente:
         pdf.cell(200, 8, txt=f"Cliente: {nome_cliente}", ln=True)
         
@@ -112,7 +113,7 @@ def gerar_pdf(resultado, qtd_pecas, nome_cliente):
             pdf.set_font("Arial", 'B', 14)
             pdf.cell(140, 10, txt=str(chave).upper(), border=1)
             pdf.cell(50, 10, txt=f"R$ {valor:.2f}", border=1, ln=True, align='R')
-        elif chave != "Preço Unitário":
+        elif chave != "Preço Unitário" and valor > 0: # Só imprime o custo se for maior que zero
             pdf.set_font("Arial", '', 12)
             pdf.cell(140, 10, txt=str(chave), border=1)
             pdf.cell(50, 10, txt=f"R$ {valor:.2f}", border=1, ln=True, align='R')
@@ -131,7 +132,6 @@ custo_hora_maq = st.sidebar.number_input("Custo Hora/Máquina (R$)", value=45.00
 imposto_perc = st.sidebar.number_input("Imposto (%)", value=10.00, step=1.00)
 sistema = PrecificadoraGrafica(custo_hora_maq, imposto_perc)
 
-# --- DADOS DO CLIENTE ---
 st.header("👤 Dados do Cliente")
 nome_cliente = st.text_input("Nome do Cliente / Empresa", placeholder="Digite o nome para sair no PDF...")
 st.markdown("---")
@@ -173,14 +173,9 @@ if tipo_produto == "☕ Canecas Sublimáticas (Porcelana)":
     custo_embalagem_unit = custo_sacola + custo_caixinha + custo_cartonada
         
     st.markdown("---")
-    if st.button("Calcular Orçamento de Canecas", type="primary", use_container_width=True):
+    if st.button("Calcular Orçamento", type="primary", use_container_width=True):
         res = sistema.calcular_orcamento_sublimacao(
-            custo_caneca, 
-            custo_insumos, 
-            custo_embalagem_unit, 
-            tempo_prensa, 
-            tiragem_cliente, 
-            margem_lucro
+            custo_caneca, custo_insumos, custo_embalagem_unit, tempo_prensa, tiragem_cliente, margem_lucro
         )
         res["Preço Unitário"] = res["Preço de Venda Final"] / tiragem_cliente
         
@@ -192,10 +187,9 @@ if tipo_produto == "☕ Canecas Sublimáticas (Porcelana)":
         r4.metric("Valor Unitário", f"R$ {res['Preço Unitário']:.2f}", delta="Por Peça")
         
         st.write("### Resumo Detalhado")
-        st.json({k: f"R$ {v:.2f}" for k, v in res.items()})
+        st.json({k: f"R$ {v:.2f}" for k, v in res.items() if v > 0 or k == "Preço Unitário"})
         
         pdf_bytes = gerar_pdf(res, tiragem_cliente, nome_cliente)
-        
         nome_arquivo = f"Orcamento_{nome_cliente.replace(' ', '_')}.pdf" if nome_cliente else "Orcamento_Canecas.pdf"
         st.download_button("📄 Baixar Orçamento em PDF", data=pdf_bytes, file_name=nome_arquivo, mime="application/pdf")
 
@@ -205,11 +199,12 @@ if tipo_produto == "☕ Canecas Sublimáticas (Porcelana)":
 else:
     mostrar_papel = True
     custo_encadernacao_total = 0.0
+    custo_capa_dura_total = 0.0
     tempo_extra_min = 0.0
     
     if tipo_produto == "📔 Material Encadernado (Agendas, Cadernos)":
         st.markdown("---")
-        st.header("📖 Configuração da Encadernação")
+        st.header("📖 Configuração do Miolo e Furação")
         
         col_tipo1, col_tipo2 = st.columns(2)
         with col_tipo1:
@@ -219,22 +214,39 @@ else:
         with col_tipo2:
             tipo_garra = st.radio("Tipo de acabamento:", ["Wire-o (Metal)", "Espiral (Plástico)"])
 
-        st.markdown("---")
         col_ag1, col_ag2 = st.columns(2)
-        
         with col_ag1:
-            paginas_miolo = st.number_input("Quantas páginas tem o material?", value=200, step=10)
+            paginas_miolo = st.number_input("Quantas páginas tem o miolo?", value=200, step=10)
             folhas_por_unidade = math.ceil(paginas_miolo / 2)
             st.write(f"Total: **{folhas_por_unidade} folhas** por unidade.")
-            
         with col_ag2:
             st.success(f"💡 **Tamanho Sugerido:** {sistema.sugerir_encadernacao(folhas_por_unidade, tipo_garra)}")
-            custo_unit_encadernacao = st.number_input(f"Custo Unitário ({tipo_garra} + Capas) R$", value=3.50, step=0.50)
-            tempo_furacao_unit = st.number_input("Tempo p/ furar e fechar 1 unidade (min)", value=3.0, step=0.5)
+            custo_unit_encadernacao = st.number_input(f"Custo do Insumo ({tipo_garra}) R$", value=1.50, step=0.10)
+            tempo_furacao_unit = st.number_input("Tempo p/ furar e fechar 1 unid (min)", value=3.0, step=0.5)
+
+        st.markdown("---")
+        st.header("📓 Composição da Capa Dura")
+        usar_capa_dura = st.checkbox("Incluir custos de Capa Dura (Papel Holler, Fotográfico e Laminação BOPP)", value=True)
+        
+        if usar_capa_dura:
+            col_capa1, col_capa2, col_capa3, col_capa4 = st.columns(4)
+            with col_capa1:
+                custo_holler = st.number_input("Holler (unid) R$", value=1.20, step=0.10)
+            with col_capa2:
+                custo_foto = st.number_input("Fotográfico (unid) R$", value=0.80, step=0.10)
+            with col_capa3:
+                custo_bopp = st.number_input("BOPP (unid) R$", value=0.40, step=0.10)
+            with col_capa4:
+                tempo_lam_unit = st.number_input("Tempo Laminação (min)", value=1.5, step=0.5)
+            
+            custo_capa_unit = custo_holler + custo_foto + custo_bopp
+            st.info(f"Custo de material da capa por unidade: **R$ {custo_capa_unit:.2f}**")
+        else:
+            custo_capa_unit = 0.0
+            tempo_lam_unit = 0.0
 
     st.markdown("---")
     st.header("2. Aproveitamento e Custos Base")
-
     colA, colB, colC = st.columns(3)
     if mostrar_papel:
         with colA:
@@ -257,7 +269,8 @@ else:
     total_folhas_usadas = 0
     if tipo_produto == "📔 Material Encadernado (Agendas, Cadernos)":
         custo_encadernacao_total = custo_unit_encadernacao * tiragem_cliente
-        tempo_extra_min = tempo_furacao_unit * tiragem_cliente
+        custo_capa_dura_total = custo_capa_unit * tiragem_cliente
+        tempo_extra_min = (tempo_furacao_unit + tempo_lam_unit) * tiragem_cliente
         
         if mostrar_papel and rendimento > 0:
             folhas_mae_por_agenda = folhas_por_unidade / rendimento
@@ -287,20 +300,23 @@ else:
         else:
             setup_min = 0
             tiragem_min = 0
-            st.write(f"⚙️ Mão de Obra: **{tempo_extra_min} min**")
+            st.write(f"⚙️ Mão de Obra Total (Furação + Capa): **{tempo_extra_min} min**")
             
-        custo_acab = st.number_input("Outros Acabamentos (R$)", value=0.00)
+        custo_acab = st.number_input("Outros Acabamentos Extras (R$)", value=0.00)
 
     with col3:
         margem_lucro = st.number_input("Margem de Lucro (%)", value=40.00, step=5.00)
 
     st.markdown("---")
-    if st.button("Calcular Orçamento Completo", type="primary", use_container_width=True):
+    if st.button("Calcular Orçamento", type="primary", use_container_width=True):
         if mostrar_papel and rendimento == 0:
             st.error("Erro: A peça final é maior que a folha mãe.")
         else:
             tempo_total_producao = setup_min + tiragem_min + tempo_extra_min
-            res = sistema.calcular_orcamento_papel(preco_resma, folhas_resma, total_folhas_usadas, tempo_total_producao, custo_acab, custo_encadernacao_total, margem_lucro)
+            res = sistema.calcular_orcamento_papel(
+                preco_resma, folhas_resma, total_folhas_usadas, tempo_total_producao, 
+                custo_acab, custo_encadernacao_total, custo_capa_dura_total, margem_lucro
+            )
             res["Preço Unitário"] = res["Preço de Venda Final"] / tiragem_cliente
             
             st.success("Orçamento gerado com sucesso!")
@@ -311,10 +327,9 @@ else:
             r4.metric("Valor Unitário", f"R$ {res['Preço Unitário']:.2f}", delta="Por Peça")
             
             st.write("### Resumo Detalhado")
-            st.json({k: f"R$ {v:.2f}" for k, v in res.items()})
+            # Só mostra no resumo os custos que forem maiores que R$ 0,00 para não poluir
+            st.json({k: f"R$ {v:.2f}" for k, v in res.items() if v > 0 or k == "Preço Unitário"})
             
             pdf_bytes = gerar_pdf(res, tiragem_cliente, nome_cliente)
-            
-            # Muda o nome do arquivo PDF automaticamente se tiver nome de cliente
             nome_arquivo = f"Orcamento_{nome_cliente.replace(' ', '_')}.pdf" if nome_cliente else "Orcamento_Grafica.pdf"
             st.download_button("📄 Baixar Orçamento em PDF", data=pdf_bytes, file_name=nome_arquivo, mime="application/pdf")
