@@ -1,8 +1,9 @@
 import streamlit as st
 import math
 from fpdf import FPDF
+from datetime import datetime
 
-# --- INICIALIZAÇÃO DO ESTOQUE (MEMÓRIA DO SISTEMA) ---
+# --- INICIALIZAÇÃO DA MEMÓRIA DO SISTEMA ---
 if 'estoque' not in st.session_state:
     st.session_state.estoque = {
         'preco_resma': 150.00,
@@ -16,6 +17,10 @@ if 'estoque' not in st.session_state:
         'custo_caixinha': 0.00,
         'custo_cartonada': 0.00
     }
+
+# Memória para salvar as compras registradas
+if 'compras_realizadas' not in st.session_state:
+    st.session_state.compras_realizadas = []
 
 class PrecificadoraGrafica:
     def __init__(self, custo_hora_maquina, imposto_percentual):
@@ -142,8 +147,7 @@ def gerar_pdf(resultado, qtd_pecas, nome_cliente):
 st.set_page_config(page_title="Orçamento Gráfico Premium", layout="wide")
 st.title("🖨️ Sistema de Precificação Gráfica")
 
-# Criação das duas abas principais
-aba_orcamento, aba_estoque = st.tabs(["🖨️ Fazer Orçamento", "📦 Estoque e Preços"])
+aba_orcamento, aba_compras = st.tabs(["🖨️ Fazer Orçamento", "📦 Controle de Compras"])
 
 st.sidebar.header("Configurações Fixas")
 custo_hora_maq = st.sidebar.number_input("Custo Hora/Máquina (R$)", value=45.00, step=5.00)
@@ -151,36 +155,67 @@ imposto_perc = st.sidebar.number_input("Imposto (%)", value=10.00, step=1.00)
 sistema = PrecificadoraGrafica(custo_hora_maq, imposto_perc)
 
 # ==========================================
-# ABA 2: GERENCIAMENTO DE ESTOQUE
+# ABA 2: CONTROLE DE COMPRAS E GASTOS (NOVO)
 # ==========================================
-with aba_estoque:
-    st.header("📦 Gerenciar Preços de Custo")
-    st.write("Atualize aqui os valores que você paga nos fornecedores. O sistema puxará esses preços automaticamente na hora de fazer o orçamento.")
+with aba_compras:
+    st.header("🛒 Lançamento de Compras de Materiais")
+    st.write("Registre aqui tudo o que você comprar para a gráfica. O sistema guardará o seu histórico de gastos.")
     
-    col_est1, col_est2, col_est3 = st.columns(3)
-    
-    with col_est1:
-        st.subheader("Papel e Impressão")
-        st.session_state.estoque['preco_resma'] = st.number_input("Preço da Resma (R$)", value=st.session_state.estoque['preco_resma'], step=5.00)
+    # Formulário para lançar uma nova compra
+    with st.form("form_nova_compra", clear_on_submit=True):
+        col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
+        with col_c1:
+            data_compra = st.date_input("Data da Compra", value=datetime.today())
+        with col_c2:
+            item_comprado = st.text_input("Material Comprado (Ex: 100 Placas de Holler, 10 Canecas)")
+        with col_c3:
+            valor_pago = st.number_input("Valor Total Pago (R$)", min_value=0.0, step=10.00)
+            
+        btn_registrar = st.form_submit_button("Registrar Gasto")
         
-        st.subheader("Sublimação (Canecas)")
-        st.session_state.estoque['custo_caneca'] = st.number_input("Caneca Branca (unid) (R$)", value=st.session_state.estoque['custo_caneca'], step=0.50)
-        st.session_state.estoque['custo_insumo_caneca'] = st.number_input("Papel + Tinta (por caneca) (R$)", value=st.session_state.estoque['custo_insumo_caneca'], step=0.10)
-        
-    with col_est2:
-        st.subheader("Encadernação e Capa")
-        st.session_state.estoque['custo_garra'] = st.number_input("Custo Médio Espiral/Wire-o (R$)", value=st.session_state.estoque['custo_garra'], step=0.10)
-        st.session_state.estoque['custo_holler'] = st.number_input("Papelão Holler (unid) (R$)", value=st.session_state.estoque['custo_holler'], step=0.10)
-        st.session_state.estoque['custo_foto'] = st.number_input("Papel Fotográfico (unid) (R$)", value=st.session_state.estoque['custo_foto'], step=0.10)
-        st.session_state.estoque['custo_bopp'] = st.number_input("Laminação BOPP (unid) (R$)", value=st.session_state.estoque['custo_bopp'], step=0.10)
+        if btn_registrar:
+            if item_comprado == "":
+                st.warning("Por favor, digite o nome do material comprado.")
+            else:
+                st.session_state.compras_realizadas.append({
+                    "Data": data_compra.strftime("%d/%m/%Y"),
+                    "Material": item_comprado,
+                    "Total Pago (R$)": valor_pago
+                })
+                st.success(f"Compra de '{item_comprado}' registrada com sucesso!")
 
-    with col_est3:
-        st.subheader("Embalagens")
-        st.session_state.estoque['custo_sacola'] = st.number_input("Sacola Simples (R$)", value=st.session_state.estoque['custo_sacola'], step=0.10)
-        st.session_state.estoque['custo_caixinha'] = st.number_input("Caixinha Padrão (R$)", value=st.session_state.estoque['custo_caixinha'], step=0.10)
-        st.session_state.estoque['custo_cartonada'] = st.number_input("Caixa Cartonada (R$)", value=st.session_state.estoque['custo_cartonada'], step=0.50)
+    # Exibição do Histórico e Total Gasto
+    if len(st.session_state.compras_realizadas) > 0:
+        st.markdown("---")
+        st.subheader("📋 Seu Histórico de Gastos")
         
-    st.success("✅ Os valores acima estão salvos e ativos para os próximos orçamentos!")
+        total_investido = sum(compra["Total Pago (R$)"] for compra in st.session_state.compras_realizadas)
+        st.metric(label="Total Gasto Acumulado", value=f"R$ {total_investido:.2f}")
+        
+        # Cria uma tabela bonita com os dados
+        st.dataframe(st.session_state.compras_realizadas, use_container_width=True)
+    else:
+        st.info("Nenhuma compra registrada ainda. Adicione os seus primeiros gastos acima!")
+
+    # Escondendo a configuração de preços base em um expansor para manter a tela limpa
+    st.markdown("---")
+    with st.expander("⚙️ Atualizar Preços Padrão para Orçamentos (Opcional)", expanded=False):
+        st.write("Atualize os valores unitários abaixo apenas se quiser que eles mudem automaticamente na hora de fazer novos orçamentos.")
+        col_est1, col_est2, col_est3 = st.columns(3)
+        with col_est1:
+            st.session_state.estoque['preco_resma'] = st.number_input("Preço da Resma A4 (R$)", value=st.session_state.estoque['preco_resma'], step=5.00)
+            st.session_state.estoque['custo_caneca'] = st.number_input("Caneca Branca (unid) (R$)", value=st.session_state.estoque['custo_caneca'], step=0.50)
+            st.session_state.estoque['custo_insumo_caneca'] = st.number_input("Tinta/Papel Sublimático (R$)", value=st.session_state.estoque['custo_insumo_caneca'], step=0.10)
+        with col_est2:
+            st.session_state.estoque['custo_garra'] = st.number_input("Espiral/Wire-o (R$)", value=st.session_state.estoque['custo_garra'], step=0.10)
+            st.session_state.estoque['custo_holler'] = st.number_input("Papelão Holler (unid) (R$)", value=st.session_state.estoque['custo_holler'], step=0.10)
+            st.session_state.estoque['custo_foto'] = st.number_input("Papel Fotográfico (unid) (R$)", value=st.session_state.estoque['custo_foto'], step=0.10)
+            st.session_state.estoque['custo_bopp'] = st.number_input("Laminação BOPP (unid) (R$)", value=st.session_state.estoque['custo_bopp'], step=0.10)
+        with col_est3:
+            st.session_state.estoque['custo_sacola'] = st.number_input("Sacola Simples (R$)", value=st.session_state.estoque['custo_sacola'], step=0.10)
+            st.session_state.estoque['custo_caixinha'] = st.number_input("Caixinha Padrão (R$)", value=st.session_state.estoque['custo_caixinha'], step=0.10)
+            st.session_state.estoque['custo_cartonada'] = st.number_input("Caixa Cartonada (R$)", value=st.session_state.estoque['custo_cartonada'], step=0.50)
+
 
 # ==========================================
 # ABA 1: FAZER ORÇAMENTO
