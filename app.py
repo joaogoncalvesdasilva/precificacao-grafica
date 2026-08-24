@@ -65,7 +65,6 @@ class PrecificadoraGrafica:
         custo_mat_insumo = custo_insumos * tiragem
         custo_mat_embalagem = custo_embalagem_unit * tiragem
         
-        # Considera o tempo de cada caneca + 5 min de aquecimento da prensa
         tempo_total_min = (tempo_prensa_min * tiragem) + 5 
         custo_maq = (tempo_total_min / 60.0) * self.custo_hora_maquina
         
@@ -85,7 +84,7 @@ class PrecificadoraGrafica:
             "Preço Unitário": 0
         }
 
-def gerar_pdf(resultado, qtd_pecas):
+def gerar_pdf(resultado, qtd_pecas, nome_cliente):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 16)
@@ -95,6 +94,11 @@ def gerar_pdf(resultado, qtd_pecas):
     pdf.set_font("Arial", 'B', 12)
     pdf.cell(200, 10, txt="Detalhes do Pedido:", ln=True)
     pdf.set_font("Arial", '', 12)
+    
+    # Adiciona o nome do cliente no PDF se foi preenchido
+    if nome_cliente:
+        pdf.cell(200, 8, txt=f"Cliente: {nome_cliente}", ln=True)
+        
     pdf.cell(200, 8, txt=f"Tiragem Total: {qtd_pecas} unidades", ln=True)
     pdf.ln(10)
     
@@ -126,6 +130,11 @@ st.sidebar.header("Configurações Fixas")
 custo_hora_maq = st.sidebar.number_input("Custo Hora/Máquina (R$)", value=45.00, step=5.00)
 imposto_perc = st.sidebar.number_input("Imposto (%)", value=10.00, step=1.00)
 sistema = PrecificadoraGrafica(custo_hora_maq, imposto_perc)
+
+# --- DADOS DO CLIENTE ---
+st.header("👤 Dados do Cliente")
+nome_cliente = st.text_input("Nome do Cliente / Empresa", placeholder="Digite o nome para sair no PDF...")
+st.markdown("---")
 
 tipo_produto = st.radio("O que vamos orçar?", [
     "📄 Material Plano (Panfletos, Cartões)", 
@@ -161,7 +170,6 @@ if tipo_produto == "☕ Canecas Sublimáticas (Porcelana)":
     with col_emb3:
         custo_cartonada = st.number_input("Custo da Caixa Cartonada (R$)", value=0.00, step=1.00)
         
-    # Soma o valor de todas as embalagens escolhidas para 1 unidade
     custo_embalagem_unit = custo_sacola + custo_caixinha + custo_cartonada
         
     st.markdown("---")
@@ -186,8 +194,10 @@ if tipo_produto == "☕ Canecas Sublimáticas (Porcelana)":
         st.write("### Resumo Detalhado")
         st.json({k: f"R$ {v:.2f}" for k, v in res.items()})
         
-        pdf_bytes = gerar_pdf(res, tiragem_cliente)
-        st.download_button("📄 Baixar Orçamento em PDF", data=pdf_bytes, file_name="Orcamento_Canecas.pdf", mime="application/pdf")
+        pdf_bytes = gerar_pdf(res, tiragem_cliente, nome_cliente)
+        
+        nome_arquivo = f"Orcamento_{nome_cliente.replace(' ', '_')}.pdf" if nome_cliente else "Orcamento_Canecas.pdf"
+        st.download_button("📄 Baixar Orçamento em PDF", data=pdf_bytes, file_name=nome_arquivo, mime="application/pdf")
 
 # ==========================================
 # LÓGICA PARA IMPRESSOS E ENCADERNADOS
@@ -303,5 +313,8 @@ else:
             st.write("### Resumo Detalhado")
             st.json({k: f"R$ {v:.2f}" for k, v in res.items()})
             
-            pdf_bytes = gerar_pdf(res, tiragem_cliente)
-            st.download_button("📄 Baixar Orçamento em PDF", data=pdf_bytes, file_name="Orcamento_Grafica.pdf", mime="application/pdf")
+            pdf_bytes = gerar_pdf(res, tiragem_cliente, nome_cliente)
+            
+            # Muda o nome do arquivo PDF automaticamente se tiver nome de cliente
+            nome_arquivo = f"Orcamento_{nome_cliente.replace(' ', '_')}.pdf" if nome_cliente else "Orcamento_Grafica.pdf"
+            st.download_button("📄 Baixar Orçamento em PDF", data=pdf_bytes, file_name=nome_arquivo, mime="application/pdf")
